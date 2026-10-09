@@ -1,0 +1,28 @@
+{
+  "name": "Burst of Kerberos service-ticket requests from a single workstation",
+  "description": "Lab rule for the CTIA golden-ticket-001 scenario. One workstation requested service tickets for many different service principal names inside a few seconds, which is what a forged Kerberos ticket looks like on the wire. The query is the same one the investigation uses, so the count the alert reports and the count you find by hand are the same number. Scoped to the lab workstation on purpose so the result is unambiguous, and left without a threshold so every one of the burst's records arrives as its own alert. The time window is deliberately long because this lab ships historical data - that is a lab-only concession, not a production setting; a real deployment would use a short window and alert on the shape of the burst rather than on a single workstation.",
+  "type": "query",
+  "risk_score": 99,
+  "severity": "critical",
+  "tags": [
+    "ctia-lab",
+    "kerberos",
+    "golden-ticket",
+    "credential-access",
+    "lateral-movement",
+    "detection-engineering"
+  ],
+  "enabled": true,
+  "interval": "1m",
+  "from": "now-365d",
+  "to": "now",
+  "index": [
+    "auth-*"
+  ],
+  "timeField": "@timestamp",
+  "query": "event.code: 4769 and source.ip: \"10.0.4.10\"",
+  "language": "kuery",
+  "max_signals": 100,
+  "actions": [],
+  "notify_when": "onActiveAlert"
+}
