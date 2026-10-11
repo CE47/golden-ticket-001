@@ -708,7 +708,7 @@ if not "%CURLCODE%"=="200" (
   call :fail "Kibana refused to create the data view !DVPAT!, HTTP %CURLCODE%" "The log data is still loaded. Check  docker logs %SCEN%-kibana  and run this file again."
   exit /b 1
 )
-call :docurl -s -o "%WORK%\dv-find.json" %KBAUTH% "%KBURL%/api/saved_objects/_find?type=index-pattern^&search_fields=title^&search=!DVPAT!^&fields=title^&per_page=50"
+call :docurl -s -o "%WORK%\dv-find.json" %KBAUTH% "%KBURL%/api/saved_objects/_find?type=index-pattern&search_fields=title&search=!DVPAT!&fields=title&per_page=50"
 findstr /c:"!DVPAT!" "%WORK%\dv-find.json" >nul 2>&1
 if errorlevel 1 (
   echo  ERROR: the data view was created but the pattern "!DVPAT!" was not stored.
@@ -859,16 +859,31 @@ rem     %~3 is an optional query body.  Without it this is a plain count of
 rem     everything in the index; with one it counts only what matches, which is
 rem     how :mkrule asks "is this rule already installed" without needing a
 rem     response it would then have to take apart in batch.
+rem
+rem     The _count URL is written out literally on both CALL lines below with a
+rem     bare &, and that is not a style choice, it is the only thing that works.
+rem     CALL parses its argument line a second time, and the two ways of getting
+rem     a multi-parameter URL into that line both corrupt it:
+rem       - storing it in a variable with a caret (set "U=..true^&filter..")
+rem         leaves a real & in the variable, and on the CALL that expands it the
+rem         quotes are gone and the & becomes a command separator
+rem       - putting the caret in the command text itself sends ^^& to curl,
+rem         because CALL doubles the caret
+rem     Bare & inside the quoted URL in the command line survives both parses.
+rem     Verified against Elasticsearch 9.1:  ^^& and ^& give
+rem     HTTP 400 illegal_argument_exception "Failed to parse value [true^^] as
+rem     only [true] or [false] are allowed", bare & gives HTTP 200.  This is
+rem     why setup-lab.sh can put the same URL in a variable - bash has no
+rem     second parse.  Do not "tidy" these back into a variable.
 :esdocount
 set "EDIDX=%~1"
 set "EDVAR=%~2"
 set "EDQ=%~3"
-set "EDCNTURL=%ESURL%/%EDIDX%/_count?allow_no_indices=true^&filter_path=count"
 call :docurl -s -o nul -X POST %ESAUTH% "%ESURL%/%EDIDX%/_refresh"
 if defined EDQ (
-  call :docurl -s -o "%WORK%\cnt.json" %ESAUTH% -X POST -H "Content-Type: application/json" --data-binary "@%EDQ%" "%EDCNTURL%"
+  call :docurl -s -o "%WORK%\cnt.json" %ESAUTH% -X POST -H "Content-Type: application/json" --data-binary "@%EDQ%" "%ESURL%/%EDIDX%/_count?allow_no_indices=true&filter_path=count"
 ) else (
-  call :docurl -s -o "%WORK%\cnt.json" %ESAUTH% "%EDCNTURL%"
+  call :docurl -s -o "%WORK%\cnt.json" %ESAUTH% "%ESURL%/%EDIDX%/_count?allow_no_indices=true&filter_path=count"
 )
 if not "%CURLCODE%"=="200" (
   call :fail "could not read the document count of %EDIDX%, HTTP %CURLCODE%" "Nothing was changed."
